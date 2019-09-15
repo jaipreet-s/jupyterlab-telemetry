@@ -2,4 +2,6 @@
 lib/
 node_modules/
 *.egg-info/
+.idea/
+package-lock.json
 .ipynb_checkpoints
