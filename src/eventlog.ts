@@ -2,10 +2,10 @@ import { Signal, Slot } from "@phosphor/signaling";
 import { CommandRegistry } from "@phosphor/commands";
 
 export class EventLog {
-    readonly handlers: Slot<EventLog, EventLog.Event[]>[];
-    readonly allowedSchemas: string[];
-    readonly eventSignal: Signal<EventLog, EventLog.Event[]>
-    readonly commandLog: EventLog.Event[]
+    private readonly handlers: Slot<EventLog, EventLog.Event[]>[];
+    private readonly allowedSchemas: string[];
+    private readonly eventSignal: Signal<EventLog, EventLog.Event[]>
+    private readonly commandLog: EventLog.Event[]
 
     constructor(options: EventLog.IOptions) {
         this.handlers = options.handlers;
@@ -13,45 +13,27 @@ export class EventLog {
         this.eventSignal = new Signal(this)
         this.commandLog = []
 
-        // Register all handlers
         for (const handler of this.handlers) {
             this.eventSignal.connect(handler);
         }
 
-        // Subcribe to JL events and publish to configured handlers
         if (options.commandRegistry !== undefined) {
-            options.commandRegistry.commandExecuted.connect((registry, command) => {
-                this.commandLog.push({
-                    schema: `org.jupyterlab.commands.${command.id}`,
-                    body: command.args,
-                    version: 1
-                });
-            });
-
-            const saveLog = () => {
-                if (this.commandLog.length === 0) {
-                    return;
-                }
-                const outgoing = this.commandLog.splice(0);
-                this.eventSignal.emit(outgoing)
-            };
-
-            // Emit the command events as configured.
-            setInterval(saveLog, options.commandEmitIntervalSeconds !== undefined ? options.commandEmitIntervalSeconds * 1000 : 120 * 1000);
+            this.enableCommandEvents(options);
         } else {
             console.log(`No commandRegistry provided. Not publishing JupyterLab command events.`)
         }
     }
 
     /**
-     * Record a single event
+     * The interface for event publishers to record a single event.
+     * 
      * - Validate that the event schema is whitelisted
      * - Validate that the event schema is valid
-     * - Emit the event 
+     * - Emit the event to the configured handlers.
      * @param event the event to record
      */
     public recordEvent(event: EventLog.Event): Promise<void> {
-        if (!this.isSchemaWhitelisted(event)) {
+        if (!this.isSchemaWhitelisted(event.schema)) {
             return;
         }
 
@@ -64,38 +46,90 @@ export class EventLog {
     }
 
     /**
-     * TODO: Validate schema
-     * @param event 
+     * TODO: Implement schema validation. 
      */
-    private isSchemaValid(event: EventLog.Event) {
+    private isSchemaValid(event: EventLog.Event): boolean {
         return true
     }
 
     /**
-     * TODO: Make this configurable via configuration
+     * TODO: Make this configurable via Settings Registry
      */
-    private isSchemaWhitelisted(event: EventLog.Event) {
-        return true;
+    private isSchemaWhitelisted(eventSchema: string): boolean {
+        let isWhitelisted =  this.allowedSchemas.indexOf(eventSchema) > -1;
+        console.log(`Schema ${eventSchema} is whitelited: ${isWhitelisted}`)
+        return isWhitelisted;
+    }
+
+    /**
+    * Subscribe the EventLog instance to all command executions in the JupyterLab application.
+    *
+    * Batches command events in-memory before emitting to each event handler.
+    *
+    * @param options the EventLog instantiation options.
+    */
+    private enableCommandEvents(options: EventLog.IOptions) {
+        options.commandRegistry.commandExecuted.connect((registry, command) => {
+            const commandEventSchema = `org.jupyterlab.commands.${command.id}`;
+            if (this.isSchemaWhitelisted(commandEventSchema)) {
+                this.commandLog.push({
+                    schema: `org.jupyterlab.commands.${command.id}`,
+                    body: command.args,
+                    version: 1
+                });
+            }
+        });
+        const saveLog = () => {
+            if (this.commandLog.length === 0) {
+                return;
+            }
+            const outgoing = this.commandLog.splice(0);
+            this.eventSignal.emit(outgoing)
+        };
+        setInterval(saveLog, options.commandEmitIntervalSeconds !== undefined ? options.commandEmitIntervalSeconds * 1000 : 120 * 1000);
     }
 }
 
 /**
  * 
- * A namespace for `EventLog` statics.
+ * A namespace for `EventLog` methods.
  */
 export namespace EventLog {
     /**
      * The instantiation options for an EventLog
      */
     export interface IOptions {
+        /**
+         * The list of schema IDs to whitelist for the EventLog instance.
+         */
         allowedSchemas: string[],
+
+        /**
+         * The list of event handlers to subscribe to the EventLog instance
+         */
         handlers: Slot<EventLog, EventLog.Event[]>[],
+
+        /**
+         * The `CommandRegistry` instance from the JupyterLab application. 
+         * If provided, this causes the EventLog to subscribe to JupyterLab command executions and 
+         * emit events to the provided handlers.
+         * 
+         * Individual commands still need to be whitelisted using the `org.jupyterlab.commands.$COMMAND_ID` schema ID.
+         */
         commandRegistry?: CommandRegistry,
+
+        /**
+         * The interval, in seconds, for which JupyterLab command events are batched in-memory before being emitted
+         * to the provided handlers.
+         * 
+         * If not provided, the default interval is 120 seconds (2 minutes).
+         */
         commandEmitIntervalSeconds?: number
     }
 
     /**
-     * 
+     * The model to represent an event.
+     * The event body needs to conform to the given schema.
      */
     export interface Event {
         schema: string,
