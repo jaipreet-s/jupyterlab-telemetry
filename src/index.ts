@@ -27,14 +27,15 @@ const extension: JupyterFrontEndPlugin<void> = {
         'foo': 'bar'
       }
     });
+    el.dispose();
   }
 };
 
-function consoleHandler(el: EventLog, events: EventLog.Event[]) {
+function consoleHandler(el: EventLog, events: EventLog.RecordedEvent[]) {
   console.log(`[Handler1] Received events ${JSON.stringify(events)}`)
 }
 
-function consoleHandler2(el: EventLog, events: EventLog.Event[]) {
+function consoleHandler2(el: EventLog, events: EventLog.RecordedEvent[]) {
   console.log(`[Handler2] Received events ${JSON.stringify(events)}`)
 }
 

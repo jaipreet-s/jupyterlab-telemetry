@@ -1,11 +1,18 @@
 import { Signal, Slot } from "@phosphor/signaling";
 import { CommandRegistry } from "@phosphor/commands";
+import { IDisposable } from "@phosphor/disposable";
 
-export class EventLog {
-    private readonly handlers: Slot<EventLog, EventLog.Event[]>[];
+/**
+ * A configurable Event Log for publishing and receiving 
+ */
+export class EventLog implements IDisposable {
+    private readonly handlers: Slot<EventLog, EventLog.RecordedEvent[]>[];
     private readonly allowedSchemas: string[];
-    private readonly eventSignal: Signal<EventLog, EventLog.Event[]>
-    private readonly commandLog: EventLog.Event[]
+    private readonly eventSignal: Signal<EventLog, EventLog.RecordedEvent[]>
+    private readonly commandLog: EventLog.RecordedEvent[]
+
+    private _isDisposed: boolean;
+    private _saveInterval: number;
 
     constructor(options: EventLog.IOptions) {
         this.handlers = options.handlers;
@@ -25,6 +32,25 @@ export class EventLog {
     }
 
     /**
+     * Get whether the Event Log is disposed.
+     */
+    get isDisposed(): boolean {
+        return this._isDisposed;
+    }
+
+    /**
+    * Dispose of the resources used by the EventLog.
+    */
+    dispose(): void {
+        if (this.isDisposed) {
+            return;
+        }
+        clearInterval(this._saveInterval);
+        Signal.clearData(this);
+        this._isDisposed = true;
+    }
+
+    /**
      * The interface for event publishers to record a single event.
      * 
      * - Validate that the event schema is whitelisted
@@ -41,8 +67,10 @@ export class EventLog {
             return;
         }
 
-        // TODO: Add event "capsule"
-        this.eventSignal.emit([event])
+        this.eventSignal.emit([{
+            ...event,
+            publishTime: new Date()
+        }])
     }
 
     /**
@@ -55,10 +83,8 @@ export class EventLog {
     /**
      * TODO: Make this configurable via Settings Registry
      */
-    private isSchemaWhitelisted(eventSchema: string): boolean {
-        let isWhitelisted =  this.allowedSchemas.indexOf(eventSchema) > -1;
-        console.log(`Schema ${eventSchema} is whitelited: ${isWhitelisted}`)
-        return isWhitelisted;
+    private isSchemaWhitelisted(schemaName: string): boolean {
+        return this.allowedSchemas.indexOf(schemaName) > -1;
     }
 
     /**
@@ -75,7 +101,8 @@ export class EventLog {
                 this.commandLog.push({
                     schema: `org.jupyterlab.commands.${command.id}`,
                     body: command.args,
-                    version: 1
+                    version: 1,
+                    publishTime: new Date()
                 });
             }
         });
@@ -86,12 +113,11 @@ export class EventLog {
             const outgoing = this.commandLog.splice(0);
             this.eventSignal.emit(outgoing)
         };
-        setInterval(saveLog, options.commandEmitIntervalSeconds !== undefined ? options.commandEmitIntervalSeconds * 1000 : 120 * 1000);
+        this._saveInterval = setInterval(saveLog, options.commandEmitIntervalSeconds !== undefined ? options.commandEmitIntervalSeconds * 1000 : 120 * 1000);
     }
 }
 
 /**
- * 
  * A namespace for `EventLog` methods.
  */
 export namespace EventLog {
@@ -107,7 +133,7 @@ export namespace EventLog {
         /**
          * The list of event handlers to subscribe to the EventLog instance
          */
-        handlers: Slot<EventLog, EventLog.Event[]>[],
+        handlers: Slot<EventLog, EventLog.RecordedEvent[]>[],
 
         /**
          * The `CommandRegistry` instance from the JupyterLab application. 
@@ -128,12 +154,23 @@ export namespace EventLog {
     }
 
     /**
-     * The model to represent an event.
+     * The model to represent an event being received from a publisher.
      * The event body needs to conform to the given schema.
      */
     export interface Event {
         schema: string,
         version: number,
         body: any
+    }
+
+    /**
+     * The model to represent an event being sent to a handler. This includes additional
+     * metadata that is added by the EventLog.
+     */
+    export interface RecordedEvent {
+        schema: string,
+        version: number,
+        body: any
+        publishTime: Date
     }
 }
