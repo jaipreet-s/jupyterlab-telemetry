@@ -3,28 +3,28 @@ import { CommandRegistry } from "@phosphor/commands";
 import { IDisposable } from "@phosphor/disposable";
 
 /**
- * A configurable Event Log for publishing and receiving 
+ * A configurable Event Log for publishing and receiving JupyterLab events.
  */
 export class EventLog implements IDisposable {
     private readonly handlers: Slot<EventLog, EventLog.RecordedEvent[]>[];
     private readonly allowedSchemas: string[];
-    private readonly eventSignal: Signal<EventLog, EventLog.RecordedEvent[]>
-    private readonly commandLog: EventLog.RecordedEvent[]
 
+    private readonly _eventSignal: Signal<EventLog, EventLog.RecordedEvent[]>
+    private readonly _commandLog: EventLog.RecordedEvent[]
     private _isDisposed: boolean;
     private _saveInterval: number;
 
     constructor(options: EventLog.IOptions) {
         this.handlers = options.handlers;
         this.allowedSchemas = options.allowedSchemas
-        this.eventSignal = new Signal(this)
-        this.commandLog = []
+        this._eventSignal = new Signal(this)
+        this._commandLog = []
 
         for (const handler of this.handlers) {
-            this.eventSignal.connect(handler);
+            this._eventSignal.connect(handler);
         }
 
-        if (options.commandRegistry !== undefined) {
+        if (options.commandRegistry) {
             this.enableCommandEvents(options);
         } else {
             console.log(`No commandRegistry provided. Not publishing JupyterLab command events.`)
@@ -67,7 +67,7 @@ export class EventLog implements IDisposable {
             return;
         }
 
-        this.eventSignal.emit([{
+        this._eventSignal.emit([{
             ...event,
             publishTime: new Date()
         }])
@@ -98,7 +98,7 @@ export class EventLog implements IDisposable {
         options.commandRegistry.commandExecuted.connect((registry, command) => {
             const commandEventSchema = `org.jupyterlab.commands.${command.id}`;
             if (this.isSchemaWhitelisted(commandEventSchema)) {
-                this.commandLog.push({
+                this._commandLog.push({
                     schema: `org.jupyterlab.commands.${command.id}`,
                     body: command.args,
                     version: 1,
@@ -107,18 +107,18 @@ export class EventLog implements IDisposable {
             }
         });
         const saveLog = () => {
-            if (this.commandLog.length === 0) {
+            if (this._commandLog.length === 0) {
                 return;
             }
-            const outgoing = this.commandLog.splice(0);
-            this.eventSignal.emit(outgoing)
+            const outgoing = this._commandLog.splice(0);
+            this._eventSignal.emit(outgoing)
         };
         this._saveInterval = setInterval(saveLog, options.commandEmitIntervalSeconds !== undefined ? options.commandEmitIntervalSeconds * 1000 : 120 * 1000);
     }
 }
 
 /**
- * A namespace for `EventLog` methods.
+ * A namespace for `EventLog` data.
  */
 export namespace EventLog {
     /**
