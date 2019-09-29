@@ -3,5 +3,6 @@ lib/
 node_modules/
 *.egg-info/
 .idea/
+tsconfig.tsbuildinfo
 package-lock.json
 .ipynb_checkpoints

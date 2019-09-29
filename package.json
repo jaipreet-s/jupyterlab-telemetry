@@ -1,5 +1,5 @@
 {
-  "name": "@jupyterlab/telemetry",
+  "name": "@jupyterlab/jupyterlab-telemetry",
   "version": "0.1.0",
   "description": "A JupyterLab extension for logging and telemetry of usage data",
   "keywords": [
@@ -7,9 +7,9 @@
     "jupyterlab",
     "jupyterlab-extension"
   ],
-  "homepage": "https://github.com/jupyterlab/telemetry",
+  "homepage": "https://github.com/jupyterlab/jupyterlab-telemetry",
   "bugs": {
-    "url": "https://github.com/jupyterlab/telemetry/issues"
+    "url": "https://github.com/jupyterlab/jupyterlab-telemetry/issues"
   },
   "license": "BSD-3-Clause",
   "author": "Project Jupyter",
